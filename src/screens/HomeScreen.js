@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   StatusBar,
   Dimensions,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Colors, Gradients } from "../theme/colors";
 
 const { width } = Dimensions.get("window");
@@ -27,7 +29,26 @@ function fmt(n) {
   return "₹" + Math.abs(n).toLocaleString("en-IN");
 }
 
-export default function HomeScreen({ expenseState, onAddExpense }) {
+function getDateKey(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function formatDateDisplay(date) {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  if (getDateKey(date) === getDateKey(today)) return "Today";
+  if (getDateKey(date) === getDateKey(yesterday)) return "Yesterday";
+  
+  return date.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+export default function HomeScreen({ expenseState, onAddExpense, selectedDate, setSelectedDate }) {
   const {
     balance = 0,
     totalIncome = 0,
@@ -35,9 +56,41 @@ export default function HomeScreen({ expenseState, onAddExpense }) {
     transactions = [],
   } = expenseState;
   const [refreshing, setRefreshing] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Filter transactions by selected date
+  const selectedDateKey = getDateKey(selectedDate);
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      const txDate = tx.date || getDateKey(new Date(tx.timestamp));
+      return txDate === selectedDateKey;
+    });
+  }, [transactions, selectedDateKey]);
+  
+  // Calculate totals for selected date
+  const dailyIncome = filteredTransactions
+    .filter((t) => t.txType === "income")
+    .reduce((s, t) => s + t.amount, 0);
+  const dailyExpense = filteredTransactions
+    .filter((t) => t.txType === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  
   const budgetPct = Math.min((totalExpense / MONTHLY_BUDGET) * 100, 100);
   const safeToSpend = Math.max(MONTHLY_BUDGET - totalExpense, 0);
-  const recent = transactions.slice(0, 5);
+  const recent = filteredTransactions.slice(0, 5);
+  
+  const changeDate = (days) => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + days);
+    setSelectedDate(newDate);
+  };
+  
+  const onDateChange = (event, date) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (date) {
+      setSelectedDate(date);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -66,6 +119,49 @@ export default function HomeScreen({ expenseState, onAddExpense }) {
         </TouchableOpacity>
       </LinearGradient>
 
+      {/* Date Selector */}
+      <View style={styles.dateSelector}>
+        <TouchableOpacity 
+          style={styles.dateArrow} 
+          onPress={() => changeDate(-1)}
+        >
+          <Ionicons name="chevron-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.dateDisplay}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+          <Text style={styles.dateText}>{formatDateDisplay(selectedDate)}</Text>
+          <Text style={styles.dateSubText}>
+            {selectedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.dateArrow} 
+          onPress={() => changeDate(1)}
+          disabled={getDateKey(selectedDate) === getDateKey(new Date())}
+        >
+          <Ionicons 
+            name="chevron-forward" 
+            size={24} 
+            color={getDateKey(selectedDate) === getDateKey(new Date()) ? Colors.textMuted : Colors.primary} 
+          />
+        </TouchableOpacity>
+      </View>
+      
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={onDateChange}
+          maximumDate={new Date()}
+        />
+      )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -86,6 +182,9 @@ export default function HomeScreen({ expenseState, onAddExpense }) {
         >
           <Text style={styles.balanceLabel}>Total Balance</Text>
           <Text style={styles.balanceAmount}>{fmt(balance)}</Text>
+          <View style={styles.dailyLabel}>
+            <Text style={styles.dailyText}>📅 {formatDateDisplay(selectedDate)}'s Summary</Text>
+          </View>
           <View style={styles.incExpRow}>
             <View style={styles.incExpItem}>
               <View style={styles.incExpIcon}>
@@ -97,7 +196,7 @@ export default function HomeScreen({ expenseState, onAddExpense }) {
               </View>
               <View>
                 <Text style={styles.incExpLabel}>Income</Text>
-                <Text style={styles.incExpAmount}>{fmt(totalIncome)}</Text>
+                <Text style={styles.incExpAmount}>{fmt(dailyIncome)}</Text>
               </View>
             </View>
             <View style={styles.divider} />
@@ -116,7 +215,7 @@ export default function HomeScreen({ expenseState, onAddExpense }) {
               </View>
               <View>
                 <Text style={styles.incExpLabel}>Expense</Text>
-                <Text style={styles.incExpAmount}>{fmt(totalExpense)}</Text>
+                <Text style={styles.incExpAmount}>{fmt(dailyExpense)}</Text>
               </View>
             </View>
           </View>
@@ -379,5 +478,55 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
+  },
+  dateSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.card,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dateArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateDisplay: {
+    flex: 1,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  dateText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.text,
+  },
+  dateSubText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  dailyLabel: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+  dailyText: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "600",
   },
 });

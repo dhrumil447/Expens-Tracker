@@ -93,6 +93,7 @@ export function useExpenses() {
         amount: parseFloat(data.amount),
         txType: data.txType,
         note: data.note || "",
+        date: data.date || new Date().toISOString().split("T")[0],
         timestamp: Date.now(),
       };
       const updated = [newTx, ...prev];

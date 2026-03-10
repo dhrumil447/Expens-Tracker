@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   TextInput,
   Dimensions,
   Vibration,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Colors, Gradients } from "../theme/colors";
 
 const { width, height } = Dimensions.get("window");
@@ -45,12 +47,39 @@ const CATEGORIES_INCOME = [
 
 const PAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 
-export default function AddExpenseModal({ visible, onClose, onSave }) {
+function getDateKey(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function formatDateShort(date) {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  if (getDateKey(date) === getDateKey(today)) return "Today";
+  if (getDateKey(date) === getDateKey(yesterday)) return "Yesterday";
+  
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+export default function AddExpenseModal({ visible, onClose, onSave, selectedDate }) {
   const [txType, setTxType] = useState("expense");
   const [amount, setAmount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState(false);
+  const [txDate, setTxDate] = useState(selectedDate || new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Update txDate when selectedDate prop changes
+  useEffect(() => {
+    if (selectedDate) {
+      setTxDate(selectedDate);
+    }
+  }, [selectedDate, visible]);
 
   const categories =
     txType === "expense" ? CATEGORIES_EXPENSE : CATEGORIES_INCOME;
@@ -80,12 +109,14 @@ export default function AddExpenseModal({ visible, onClose, onSave }) {
       name: selectedCategory.label,
       note,
       txType,
+      date: getDateKey(txDate),
     });
     setSaved(false);
     setAmount("");
     setSelectedCategory(null);
     setNote("");
     setTxType("expense");
+    setTxDate(selectedDate || new Date());
     onClose();
   };
 
@@ -95,7 +126,15 @@ export default function AddExpenseModal({ visible, onClose, onSave }) {
     setNote("");
     setTxType("expense");
     setSaved(false);
+    setTxDate(selectedDate || new Date());
     onClose();
+  };
+
+  const onDateChange = (event, date) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (date) {
+      setTxDate(date);
+    }
   };
 
   const isIncome = txType === "income";
@@ -196,6 +235,29 @@ export default function AddExpenseModal({ visible, onClose, onSave }) {
             value={note}
             onChangeText={setNote}
           />
+
+          {/* Date Selector */}
+          <TouchableOpacity 
+            style={styles.dateBtn} 
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+            <Text style={styles.dateBtnText}>{formatDateShort(txDate)}</Text>
+            <Text style={styles.dateBtnSub}>
+              {txDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
+          
+          {showDatePicker && (
+            <DateTimePicker
+              value={txDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
+          )}
 
           {/* Numpad */}
           <View style={styles.numpad}>
@@ -331,6 +393,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  dateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+  },
+  dateBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  dateBtnSub: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.textSecondary,
   },
   numpad: { flexDirection: "row", flexWrap: "wrap", marginBottom: 14 },
   padBtn: { width: "33.33%", paddingVertical: 14, alignItems: "center" },

@@ -37,7 +37,7 @@ const TABS = [
   },
 ];
 
-export default function AppNavigator({ expenseState, onAddExpense }) {
+export default function AppNavigator({ expenseState, onAddExpense, selectedDate, setSelectedDate }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -74,6 +74,8 @@ export default function AppNavigator({ expenseState, onAddExpense }) {
               {...props}
               expenseState={expenseState}
               onAddExpense={onAddExpense}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
             />
           )}
         />

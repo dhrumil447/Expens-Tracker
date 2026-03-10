@@ -15,6 +15,7 @@ const ONBOARDED_KEY = "dhanpath_rn_onboarded";
 export default function App() {
   const [onboarded, setOnboarded] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const expenseState = useExpenses();
 
   useEffect(() => {
@@ -45,12 +46,15 @@ export default function App() {
         <AppNavigator
           expenseState={expenseState}
           onAddExpense={() => setModalVisible(true)}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
         />
       </NavigationContainer>
       <AddExpenseModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onSave={(data) => expenseState.addTransaction(data)}
+        selectedDate={selectedDate}
       />
     </GestureHandlerRootView>
   );
