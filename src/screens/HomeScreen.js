@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   RefreshControl,
   Platform,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import LinearGradient from "react-native-linear-gradient";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Colors, Gradients } from "../theme/colors";
+import { Colors, Gradients, getColors, getGradients } from "../theme/colors";
+import { useTheme } from "../theme/ThemeContext";
+import SettingsModal from "../components/SettingsModal";
 
 const { width } = Dimensions.get("window");
 const MONTHLY_BUDGET = 50000;
@@ -37,10 +39,10 @@ function formatDateDisplay(date) {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  
+
   if (getDateKey(date) === getDateKey(today)) return "Today";
   if (getDateKey(date) === getDateKey(yesterday)) return "Yesterday";
-  
+
   return date.toLocaleDateString("en-IN", {
     weekday: "short",
     day: "2-digit",
@@ -48,7 +50,16 @@ function formatDateDisplay(date) {
   });
 }
 
-export default function HomeScreen({ expenseState, onAddExpense, selectedDate, setSelectedDate }) {
+function HomeScreen({
+  expenseState,
+  onAddExpense,
+  selectedDate,
+  setSelectedDate,
+}) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
+  const gradients = getGradients(isDark);
+
   const {
     balance = 0,
     totalIncome = 0,
@@ -57,7 +68,8 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
   } = expenseState;
   const [refreshing, setRefreshing] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+  const [showSettings, setShowSettings] = useState(false);
+
   // Filter transactions by selected date
   const selectedDateKey = getDateKey(selectedDate);
   const filteredTransactions = useMemo(() => {
@@ -66,92 +78,151 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
       return txDate === selectedDateKey;
     });
   }, [transactions, selectedDateKey]);
-  
-  // Calculate totals for selected date
-  const dailyIncome = filteredTransactions
-    .filter((t) => t.txType === "income")
-    .reduce((s, t) => s + t.amount, 0);
-  const dailyExpense = filteredTransactions
-    .filter((t) => t.txType === "expense")
-    .reduce((s, t) => s + t.amount, 0);
-  
-  const budgetPct = Math.min((totalExpense / MONTHLY_BUDGET) * 100, 100);
-  const safeToSpend = Math.max(MONTHLY_BUDGET - totalExpense, 0);
-  const recent = filteredTransactions.slice(0, 5);
-  
-  const changeDate = (days) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + days);
-    setSelectedDate(newDate);
-  };
-  
-  const onDateChange = (event, date) => {
-    setShowDatePicker(Platform.OS === "ios");
-    if (date) {
-      setSelectedDate(date);
-    }
-  };
 
-  const onRefresh = () => {
+  // Calculate totals for selected date
+  const dailyIncome = useMemo(
+    () =>
+      filteredTransactions
+        .filter((t) => t.txType === "income")
+        .reduce((s, t) => s + t.amount, 0),
+    [filteredTransactions],
+  );
+
+  const dailyExpense = useMemo(
+    () =>
+      filteredTransactions
+        .filter((t) => t.txType === "expense")
+        .reduce((s, t) => s + t.amount, 0),
+    [filteredTransactions],
+  );
+
+  const budgetPct = useMemo(
+    () => Math.min((totalExpense / MONTHLY_BUDGET) * 100, 100),
+    [totalExpense],
+  );
+
+  const safeToSpend = useMemo(
+    () => Math.max(MONTHLY_BUDGET - totalExpense, 0),
+    [totalExpense],
+  );
+
+  const recent = useMemo(
+    () => filteredTransactions.slice(0, 5),
+    [filteredTransactions],
+  );
+
+  const changeDate = useCallback(
+    (days) => {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(newDate.getDate() + days);
+      setSelectedDate(newDate);
+    },
+    [selectedDate, setSelectedDate],
+  );
+
+  const onDateChange = useCallback(
+    (event, date) => {
+      setShowDatePicker(Platform.OS === "ios");
+      if (date) {
+        setSelectedDate(date);
+      }
+    },
+    [setSelectedDate],
+  );
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 800);
-  };
+  }, []);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
 
       {/* Header */}
-      <LinearGradient
-        colors={["#0d1b2e", Colors.background]}
-        style={styles.header}
-      >
+      <LinearGradient colors={gradients.header} style={styles.header}>
         <View>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.subGreeting}>DhanPath Smart Manager</Text>
+          <Text style={[styles.greeting, { color: colors.text }]}>
+            {getGreeting()}
+          </Text>
+          <Text style={[styles.subGreeting, { color: colors.textSecondary }]}>
+            DhanPath Smart Manager
+          </Text>
         </View>
-        <TouchableOpacity style={styles.notifBtn}>
-          <Ionicons
-            name="notifications-outline"
-            size={22}
-            color={Colors.textSecondary}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerBtns}>
+          <TouchableOpacity
+            style={[styles.notifBtn, { backgroundColor: colors.card }]}
+            onPress={() => setShowSettings(true)}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.notifBtn, { backgroundColor: colors.card }]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       {/* Date Selector */}
-      <View style={styles.dateSelector}>
-        <TouchableOpacity 
-          style={styles.dateArrow} 
+      <View
+        style={[
+          styles.dateSelector,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.dateArrow, { backgroundColor: colors.surface }]}
           onPress={() => changeDate(-1)}
         >
-          <Ionicons name="chevron-back" size={24} color={Colors.primary} />
+          <Ionicons name="chevron-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.dateDisplay}
           onPress={() => setShowDatePicker(true)}
         >
-          <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
-          <Text style={styles.dateText}>{formatDateDisplay(selectedDate)}</Text>
-          <Text style={styles.dateSubText}>
-            {selectedDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+          <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+          <Text style={[styles.dateText, { color: colors.text }]}>
+            {formatDateDisplay(selectedDate)}
+          </Text>
+          <Text style={[styles.dateSubText, { color: colors.textSecondary }]}>
+            {selectedDate.toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
           </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.dateArrow} 
+
+        <TouchableOpacity
+          style={[styles.dateArrow, { backgroundColor: colors.surface }]}
           onPress={() => changeDate(1)}
           disabled={getDateKey(selectedDate) === getDateKey(new Date())}
         >
-          <Ionicons 
-            name="chevron-forward" 
-            size={24} 
-            color={getDateKey(selectedDate) === getDateKey(new Date()) ? Colors.textMuted : Colors.primary} 
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={
+              getDateKey(selectedDate) === getDateKey(new Date())
+                ? colors.textMuted
+                : colors.primary
+            }
           />
         </TouchableOpacity>
       </View>
-      
+
       {showDatePicker && (
         <DateTimePicker
           value={selectedDate}
@@ -169,13 +240,13 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
+            tintColor={colors.primary}
           />
         }
       >
         {/* Balance Card */}
         <LinearGradient
-          colors={Gradients.primary}
+          colors={gradients.primary}
           style={styles.balanceCard}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -183,7 +254,9 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
           <Text style={styles.balanceLabel}>Total Balance</Text>
           <Text style={styles.balanceAmount}>{fmt(balance)}</Text>
           <View style={styles.dailyLabel}>
-            <Text style={styles.dailyText}>📅 {formatDateDisplay(selectedDate)}'s Summary</Text>
+            <Text style={styles.dailyText}>
+              📅 {formatDateDisplay(selectedDate)}'s Summary
+            </Text>
           </View>
           <View style={styles.incExpRow}>
             <View style={styles.incExpItem}>
@@ -191,7 +264,7 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
                 <Ionicons
                   name="arrow-down-circle"
                   size={18}
-                  color={Colors.white}
+                  color={colors.white}
                 />
               </View>
               <View>
@@ -210,7 +283,7 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
                 <Ionicons
                   name="arrow-up-circle"
                   size={18}
-                  color={Colors.white}
+                  color={colors.white}
                 />
               </View>
               <View>
@@ -222,15 +295,24 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
         </LinearGradient>
 
         {/* Budget Progress */}
-        <View style={styles.card}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Monthly Budget</Text>
-            <Text style={styles.cardSub}>{fmt(MONTHLY_BUDGET)}</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Monthly Budget
+            </Text>
+            <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+              {fmt(MONTHLY_BUDGET)}
+            </Text>
           </View>
-          <View style={styles.progressBg}>
+          <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
             <LinearGradient
               colors={
-                budgetPct > 80 ? ["#ef4444", "#dc2626"] : Gradients.primary
+                budgetPct > 80 ? ["#ef4444", "#dc2626"] : gradients.primary
               }
               style={[styles.progressFill, { width: `${budgetPct}%` }]}
               start={{ x: 0, y: 0 }}
@@ -238,10 +320,12 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
             />
           </View>
           <View style={styles.budgetRow}>
-            <Text style={styles.budgetSpent}>
+            <Text style={[styles.budgetSpent, { color: colors.textSecondary }]}>
               Spent {fmt(totalExpense)} ({budgetPct.toFixed(0)}%)
             </Text>
-            <Text style={styles.budgetSafe}>Safe {fmt(safeToSpend)}</Text>
+            <Text style={[styles.budgetSafe, { color: colors.primary }]}>
+              Safe {fmt(safeToSpend)}
+            </Text>
           </View>
         </View>
 
@@ -251,11 +335,11 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
             {
               label: "Add Expense",
               icon: "remove-circle",
-              color: Colors.expense,
+              color: colors.expense,
             },
-            { label: "Add Income", icon: "add-circle", color: Colors.income },
-            { label: "Transfer", icon: "swap-horizontal", color: Colors.info },
-            { label: "Analytics", icon: "bar-chart", color: Colors.warning },
+            { label: "Add Income", icon: "add-circle", color: colors.income },
+            { label: "Transfer", icon: "swap-horizontal", color: colors.info },
+            { label: "Analytics", icon: "bar-chart", color: colors.warning },
           ].map((q) => (
             <TouchableOpacity
               key={q.label}
@@ -271,31 +355,55 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
               >
                 <Ionicons name={q.icon} size={24} color={q.color} />
               </View>
-              <Text style={styles.quickLabel}>{q.label}</Text>
+              <Text
+                style={[styles.quickLabel, { color: colors.textSecondary }]}
+              >
+                {q.label}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Recent Transactions */}
-        <View style={styles.card}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Recent Transactions</Text>
-            <Text style={styles.seeAll}>See All</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              Recent Transactions
+            </Text>
+            <Text style={[styles.seeAll, { color: colors.primary }]}>
+              See All
+            </Text>
           </View>
           {recent.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>💸</Text>
-              <Text style={styles.emptyText}>No transactions yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                No transactions yet
+              </Text>
             </View>
           ) : (
             recent.map((tx) => (
-              <View key={tx.id} style={styles.txRow}>
-                <View style={styles.txEmoji}>
+              <View
+                key={tx.id}
+                style={[styles.txRow, { borderBottomColor: colors.border }]}
+              >
+                <View
+                  style={[styles.txEmoji, { backgroundColor: colors.surface }]}
+                >
                   <Text style={{ fontSize: 22 }}>{tx.categoryEmoji}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.txName}>{tx.name}</Text>
-                  <Text style={styles.txDate}>
+                  <Text style={[styles.txName, { color: colors.text }]}>
+                    {tx.name}
+                  </Text>
+                  <Text
+                    style={[styles.txDate, { color: colors.textSecondary }]}
+                  >
                     {new Date(tx.timestamp).toLocaleDateString("en-IN", {
                       day: "2-digit",
                       month: "short",
@@ -307,7 +415,7 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
                     styles.txAmount,
                     {
                       color:
-                        tx.txType === "income" ? Colors.income : Colors.expense,
+                        tx.txType === "income" ? colors.income : colors.expense,
                     },
                   ]}
                 >
@@ -326,23 +434,31 @@ export default function HomeScreen({ expenseState, onAddExpense, selectedDate, s
       <TouchableOpacity
         onPress={onAddExpense}
         activeOpacity={0.85}
-        style={styles.fabWrap}
+        style={[styles.fabWrap, { shadowColor: colors.primary }]}
       >
         <LinearGradient
-          colors={Gradients.primary}
+          colors={gradients.primary}
           style={styles.fab}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Ionicons name="add" size={30} color={Colors.white} />
+          <Ionicons name="add" size={30} color={colors.white} />
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </View>
   );
 }
 
+export default React.memo(HomeScreen);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -351,13 +467,16 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
   },
-  greeting: { fontSize: 20, fontWeight: "800", color: Colors.text },
-  subGreeting: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  greeting: { fontSize: 20, fontWeight: "800" },
+  subGreeting: { fontSize: 12, marginTop: 2 },
+  headerBtns: {
+    flexDirection: "row",
+    gap: 8,
+  },
   notifBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.card,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -371,7 +490,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 36,
     fontWeight: "800",
-    color: Colors.white,
+    color: "#ffffff",
     marginBottom: 20,
   },
   incExpRow: { flexDirection: "row", alignItems: "center" },
@@ -385,7 +504,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   incExpLabel: { fontSize: 11, color: "rgba(255,255,255,0.7)" },
-  incExpAmount: { fontSize: 15, fontWeight: "700", color: Colors.white },
+  incExpAmount: { fontSize: 15, fontWeight: "700", color: "#ffffff" },
   divider: {
     width: 1,
     height: 36,
@@ -393,12 +512,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   card: {
-    backgroundColor: Colors.card,
     borderRadius: 20,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   cardHeader: {
     flexDirection: "row",
@@ -406,20 +523,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: Colors.text },
-  cardSub: { fontSize: 13, color: Colors.textSecondary },
-  seeAll: { fontSize: 13, color: Colors.primary, fontWeight: "600" },
+  cardTitle: { fontSize: 15, fontWeight: "700" },
+  cardSub: { fontSize: 13 },
+  seeAll: { fontSize: 13, fontWeight: "600" },
   progressBg: {
     height: 8,
-    backgroundColor: Colors.border,
     borderRadius: 6,
     overflow: "hidden",
     marginBottom: 8,
   },
   progressFill: { height: "100%", borderRadius: 6 },
   budgetRow: { flexDirection: "row", justifyContent: "space-between" },
-  budgetSpent: { fontSize: 12, color: Colors.textSecondary },
-  budgetSafe: { fontSize: 12, color: Colors.primary },
+  budgetSpent: { fontSize: 12 },
+  budgetSafe: { fontSize: 12 },
   quickRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -436,7 +552,6 @@ const styles = StyleSheet.create({
   },
   quickLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
     textAlign: "center",
   },
   txRow: {
@@ -444,30 +559,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   txEmoji: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  txName: { fontSize: 14, fontWeight: "600", color: Colors.text },
-  txDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  txName: { fontSize: 14, fontWeight: "600" },
+  txDate: { fontSize: 12, marginTop: 2 },
   txAmount: { fontSize: 14, fontWeight: "700" },
   empty: { alignItems: "center", paddingVertical: 24 },
   emptyEmoji: { fontSize: 36, marginBottom: 8 },
-  emptyText: { color: Colors.textSecondary, fontSize: 14 },
+  emptyText: { fontSize: 14 },
   fabWrap: {
     position: "absolute",
     right: 20,
     bottom: 24,
     borderRadius: 28,
     elevation: 8,
-    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
@@ -485,18 +597,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: Colors.card,
     marginHorizontal: 16,
     marginBottom: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   dateArrow: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -510,11 +619,9 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 18,
     fontWeight: "700",
-    color: Colors.text,
   },
   dateSubText: {
     fontSize: 12,
-    color: Colors.textSecondary,
   },
   dailyLabel: {
     backgroundColor: "rgba(255,255,255,0.15)",

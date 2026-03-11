@@ -11,39 +11,15 @@ import {
   Vibration,
   Platform,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import LinearGradient from "react-native-linear-gradient";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Colors, Gradients } from "../theme/colors";
+import { Colors, Gradients, getColors, getGradients } from "../theme/colors";
+import { useTheme } from "../theme/ThemeContext";
+import { useCategories } from "../hooks/useCategories";
+import { useAccounts } from "../hooks/useAccounts";
 
 const { width, height } = Dimensions.get("window");
-
-const CATEGORIES_EXPENSE = [
-  { emoji: "🍕", label: "Food" },
-  { emoji: "🛒", label: "Shopping" },
-  { emoji: "🚗", label: "Transport" },
-  { emoji: "⚡", label: "Bills" },
-  { emoji: "🎬", label: "Entertainment" },
-  { emoji: "💊", label: "Health" },
-  { emoji: "📚", label: "Education" },
-  { emoji: "✈️", label: "Travel" },
-  { emoji: "🍺", label: "Social" },
-  { emoji: "🏠", label: "Rent" },
-  { emoji: "💇", label: "Personal" },
-  { emoji: "🐾", label: "Others" },
-];
-
-const CATEGORIES_INCOME = [
-  { emoji: "💼", label: "Salary" },
-  { emoji: "💻", label: "Freelance" },
-  { emoji: "📈", label: "Investment" },
-  { emoji: "💸", label: "Transfer" },
-  { emoji: "🎁", label: "Gift" },
-  { emoji: "🏪", label: "Business" },
-  { emoji: "🎓", label: "Stipend" },
-  { emoji: "💰", label: "Other" },
-];
 
 const PAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"];
 
@@ -55,24 +31,44 @@ function formatDateShort(date) {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  
+
   if (getDateKey(date) === getDateKey(today)) return "Today";
   if (getDateKey(date) === getDateKey(yesterday)) return "Yesterday";
-  
+
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
   });
 }
 
-export default function AddExpenseModal({ visible, onClose, onSave, selectedDate }) {
+export default function AddExpenseModal({
+  visible,
+  onClose,
+  onSave,
+  selectedDate,
+}) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
+  const gradients = getGradients(isDark);
+  const { getExpenseCategories, getIncomeCategories } = useCategories();
+  const { accounts, getDefaultAccount } = useAccounts();
+
   const [txType, setTxType] = useState("expense");
   const [amount, setAmount] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(null);
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState(false);
   const [txDate, setTxDate] = useState(selectedDate || new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Set default account on mount
+  useEffect(() => {
+    if (!selectedAccount && accounts.length > 0) {
+      setSelectedAccount(getDefaultAccount());
+    }
+  }, [accounts]);
 
   // Update txDate when selectedDate prop changes
   useEffect(() => {
@@ -82,10 +78,10 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
   }, [selectedDate, visible]);
 
   const categories =
-    txType === "expense" ? CATEGORIES_EXPENSE : CATEGORIES_INCOME;
+    txType === "expense" ? getExpenseCategories() : getIncomeCategories();
 
   const handlePad = (key) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Vibration.vibrate(10);
     if (key === "⌫") {
       setAmount((a) => a.slice(0, -1));
     } else if (key === "." && amount.includes(".")) {
@@ -99,21 +95,27 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
 
   const handleSave = async () => {
     if (!amount || parseFloat(amount) === 0 || !selectedCategory) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Vibration.vibrate(50);
     setSaved(true);
     await new Promise((r) => setTimeout(r, 900));
     onSave({
       amount: parseFloat(amount),
       categoryEmoji: selectedCategory.emoji,
       categoryLabel: selectedCategory.label,
-      name: selectedCategory.label,
+      subcategory: selectedSubcategory || null,
+      name: selectedSubcategory || selectedCategory.label,
       note,
       txType,
       date: getDateKey(txDate),
+      accountId: selectedAccount?.id,
+      accountLabel: selectedAccount?.label,
+      accountEmoji: selectedAccount?.emoji,
     });
     setSaved(false);
     setAmount("");
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setSelectedAccount(getDefaultAccount());
     setNote("");
     setTxType("expense");
     setTxDate(selectedDate || new Date());
@@ -123,6 +125,8 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
   const reset = () => {
     setAmount("");
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setSelectedAccount(getDefaultAccount());
     setNote("");
     setTxType("expense");
     setSaved(false);
@@ -149,8 +153,8 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
     >
       <View style={styles.overlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={reset} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           {/* Type toggle */}
           <View style={styles.toggleRow}>
@@ -163,16 +167,24 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
                 }}
                 style={[
                   styles.toggleBtn,
+                  { borderColor: colors.border },
                   txType === t &&
                     (t === "income"
-                      ? styles.toggleIncome
-                      : styles.toggleExpense),
+                      ? {
+                          borderColor: colors.income,
+                          backgroundColor: colors.income + "22",
+                        }
+                      : {
+                          borderColor: colors.expense,
+                          backgroundColor: colors.expense + "22",
+                        }),
                 ]}
               >
                 <Text
                   style={[
                     styles.toggleText,
-                    txType === t && styles.toggleTextActive,
+                    { color: colors.textSecondary },
+                    txType === t && { color: colors.text },
                   ]}
                 >
                   {t === "income" ? "↓ Income" : "↑ Expense"}
@@ -183,11 +195,13 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
 
           {/* Amount display */}
           <View style={styles.amtWrap}>
-            <Text style={styles.currency}>₹</Text>
+            <Text style={[styles.currency, { color: colors.textSecondary }]}>
+              ₹
+            </Text>
             <Text
               style={[
                 styles.amtText,
-                { color: isIncome ? Colors.income : Colors.expense },
+                { color: isIncome ? colors.income : colors.expense },
               ]}
             >
               {amount || "0"}
@@ -203,21 +217,35 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
             {categories.map((c) => (
               <TouchableOpacity
                 key={c.label}
-                onPress={() => setSelectedCategory(c)}
+                onPress={() => {
+                  setSelectedCategory(c);
+                  setSelectedSubcategory(null);
+                }}
                 style={[
                   styles.catBtn,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
                   selectedCategory?.label === c.label &&
                     (isIncome
-                      ? styles.catActiveIncome
-                      : styles.catActiveExpense),
+                      ? {
+                          borderColor: colors.income,
+                          backgroundColor: colors.income + "18",
+                        }
+                      : {
+                          borderColor: colors.expense,
+                          backgroundColor: colors.expense + "18",
+                        }),
                 ]}
               >
                 <Text style={styles.catEmoji}>{c.emoji}</Text>
                 <Text
                   style={[
                     styles.catLabel,
+                    { color: colors.textSecondary },
                     selectedCategory?.label === c.label && {
-                      color: isIncome ? Colors.income : Colors.expense,
+                      color: isIncome ? colors.income : colors.expense,
                     },
                   ]}
                 >
@@ -227,28 +255,138 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
             ))}
           </ScrollView>
 
+          {/* Subcategories */}
+          {selectedCategory?.subcategories &&
+            selectedCategory.subcategories.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.subCatScroll}
+              >
+                {selectedCategory.subcategories.map((sub) => (
+                  <TouchableOpacity
+                    key={sub}
+                    onPress={() =>
+                      setSelectedSubcategory(
+                        selectedSubcategory === sub ? null : sub,
+                      )
+                    }
+                    style={[
+                      styles.subCatBtn,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                      selectedSubcategory === sub &&
+                        (isIncome
+                          ? {
+                              borderColor: colors.income,
+                              backgroundColor: colors.income + "18",
+                            }
+                          : {
+                              borderColor: colors.expense,
+                              backgroundColor: colors.expense + "18",
+                            }),
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.subCatLabel,
+                        { color: colors.textSecondary },
+                        selectedSubcategory === sub && {
+                          color: isIncome ? colors.income : colors.expense,
+                        },
+                      ]}
+                    >
+                      {sub}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+          {/* Account Selector */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.accountScroll}
+          >
+            {accounts.map((acc) => (
+              <TouchableOpacity
+                key={acc.id}
+                onPress={() => setSelectedAccount(acc)}
+                style={[
+                  styles.accountBtn,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                  selectedAccount?.id === acc.id && {
+                    borderColor: colors.primary,
+                    backgroundColor: colors.primaryGlow,
+                  },
+                ]}
+              >
+                <Text style={styles.accountEmoji}>{acc.emoji}</Text>
+                <Text
+                  style={[
+                    styles.accountLabel,
+                    { color: colors.textSecondary },
+                    selectedAccount?.id === acc.id && { color: colors.primary },
+                  ]}
+                >
+                  {acc.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
           {/* Note */}
           <TextInput
-            style={styles.noteInput}
+            style={[
+              styles.noteInput,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                color: colors.text,
+              },
+            ]}
             placeholder="Add a note (optional)..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
           />
 
           {/* Date Selector */}
-          <TouchableOpacity 
-            style={styles.dateBtn} 
+          <TouchableOpacity
+            style={[
+              styles.dateBtn,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
             onPress={() => setShowDatePicker(true)}
           >
-            <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
-            <Text style={styles.dateBtnText}>{formatDateShort(txDate)}</Text>
-            <Text style={styles.dateBtnSub}>
-              {txDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={[styles.dateBtnText, { color: colors.text }]}>
+              {formatDateShort(txDate)}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+            <Text style={[styles.dateBtnSub, { color: colors.textSecondary }]}>
+              {txDate.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+            </Text>
+            <Ionicons
+              name="chevron-down"
+              size={16}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
-          
+
           {showDatePicker && (
             <DateTimePicker
               value={txDate}
@@ -268,15 +406,27 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
                 onPress={() => handlePad(k)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.padText}>{k}</Text>
+                <Text style={[styles.padText, { color: colors.text }]}>
+                  {k}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Save button */}
           {saved ? (
-            <View style={styles.successBtn}>
-              <Text style={styles.successText}>✅ Saved!</Text>
+            <View
+              style={[
+                styles.successBtn,
+                {
+                  backgroundColor: colors.primaryGlow,
+                  borderColor: colors.primary,
+                },
+              ]}
+            >
+              <Text style={[styles.successText, { color: colors.primary }]}>
+                ✅ Saved!
+              </Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -288,9 +438,9 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
                 colors={
                   canSave
                     ? isIncome
-                      ? Gradients.income
-                      : Gradients.expense
-                    : [Colors.border, Colors.border]
+                      ? gradients.income
+                      : gradients.expense
+                    : [colors.border, colors.border]
                 }
                 style={styles.saveBtn}
                 start={{ x: 0, y: 0 }}
@@ -299,7 +449,7 @@ export default function AddExpenseModal({ visible, onClose, onSave, selectedDate
                 <Text
                   style={[
                     styles.saveBtnText,
-                    !canSave && { color: Colors.textMuted },
+                    !canSave && { color: colors.textMuted },
                   ]}
                 >
                   {isIncome ? "Add Income" : "Add Expense"}
@@ -321,7 +471,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   sheet: {
-    backgroundColor: Colors.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
@@ -330,7 +479,6 @@ const styles = StyleSheet.create({
   handle: {
     width: 36,
     height: 4,
-    backgroundColor: Colors.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 16,
@@ -341,28 +489,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: Colors.border,
     alignItems: "center",
   },
-  toggleExpense: {
-    borderColor: Colors.expense,
-    backgroundColor: Colors.expense + "22",
-  },
-  toggleIncome: {
-    borderColor: Colors.income,
-    backgroundColor: Colors.income + "22",
-  },
-  toggleText: { fontSize: 14, fontWeight: "600", color: Colors.textSecondary },
-  toggleTextActive: { color: Colors.text },
+  toggleText: { fontSize: 14, fontWeight: "600" },
   amtWrap: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "center",
     marginBottom: 16,
   },
-  currency: { fontSize: 28, color: Colors.textSecondary, marginRight: 4 },
+  currency: { fontSize: 28, marginRight: 4 },
   amtText: { fontSize: 48, fontWeight: "800" },
-  catScroll: { marginBottom: 12 },
+  catScroll: { marginBottom: 8 },
   catBtn: {
     alignItems: "center",
     paddingHorizontal: 12,
@@ -370,64 +508,67 @@ const styles = StyleSheet.create({
     marginRight: 6,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  catActiveExpense: {
-    borderColor: Colors.expense,
-    backgroundColor: Colors.expense + "18",
-  },
-  catActiveIncome: {
-    borderColor: Colors.income,
-    backgroundColor: Colors.income + "18",
   },
   catEmoji: { fontSize: 22, marginBottom: 3 },
-  catLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: "500" },
+  catLabel: { fontSize: 10, fontWeight: "500" },
+  subCatScroll: { marginBottom: 12 },
+  subCatBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  subCatLabel: { fontSize: 11, fontWeight: "500" },
+  accountScroll: { marginBottom: 12 },
+  accountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 6,
+  },
+  accountEmoji: { fontSize: 18 },
+  accountLabel: { fontSize: 11, fontWeight: "500" },
   noteInput: {
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: Colors.text,
     fontSize: 13,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   dateBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
     gap: 8,
   },
   dateBtnText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.text,
   },
   dateBtnSub: {
     flex: 1,
     fontSize: 12,
-    color: Colors.textSecondary,
   },
   numpad: { flexDirection: "row", flexWrap: "wrap", marginBottom: 14 },
   padBtn: { width: "33.33%", paddingVertical: 14, alignItems: "center" },
-  padText: { fontSize: 22, fontWeight: "600", color: Colors.text },
+  padText: { fontSize: 22, fontWeight: "600" },
   saveBtn: { borderRadius: 18, paddingVertical: 17, alignItems: "center" },
-  saveBtnText: { fontSize: 16, fontWeight: "700", color: Colors.white },
+  saveBtnText: { fontSize: 16, fontWeight: "700", color: "#ffffff" },
   successBtn: {
     borderRadius: 18,
     paddingVertical: 17,
     alignItems: "center",
-    backgroundColor: Colors.primaryGlow,
     borderWidth: 1,
-    borderColor: Colors.primary,
   },
-  successText: { fontSize: 16, fontWeight: "700", color: Colors.primary },
+  successText: { fontSize: 16, fontWeight: "700" },
 });

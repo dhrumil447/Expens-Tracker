@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 const STORAGE_KEY = "dhanpath_rn_expenses";
 
@@ -107,20 +107,38 @@ export function useExpenses() {
   const deleteTransaction = useCallback(async (id) => {
     setTransactions((prev) => {
       const updated = prev.filter((t) => t.id !== id);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(
-        () => {},
-      );
+
+      // Defer storage write to not block UI
+      InteractionManager.runAfterInteractions(() => {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(
+          () => {},
+        );
+      });
+
       return updated;
     });
   }, []);
 
-  const totalIncome = transactions
-    .filter((t) => t.txType === "income")
-    .reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions
-    .filter((t) => t.txType === "expense")
-    .reduce((s, t) => s + t.amount, 0);
-  const balance = totalIncome - totalExpense;
+  const totalIncome = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.txType === "income")
+        .reduce((s, t) => s + t.amount, 0),
+    [transactions],
+  );
+
+  const totalExpense = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.txType === "expense")
+        .reduce((s, t) => s + t.amount, 0),
+    [transactions],
+  );
+
+  const balance = useMemo(
+    () => totalIncome - totalExpense,
+    [totalIncome, totalExpense],
+  );
 
   return {
     transactions,

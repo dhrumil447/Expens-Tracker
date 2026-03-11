@@ -9,7 +9,7 @@ import {
   StatusBar,
   Image,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import LinearGradient from "react-native-linear-gradient";
 import { Colors, Gradients } from "../theme/colors";
 
 const { width, height } = Dimensions.get("window");

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,14 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "../theme/colors";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import { getColors } from "../theme/colors";
+import { useTheme } from "../theme/ThemeContext";
 
 const FILTERS = ["All", "Income", "Expense"];
 const DELETE_WIDTH = 72;
 
-function SwipeRow({ tx, onDelete }) {
+const SwipeRow = React.memo(({ tx, onDelete, colors }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const rowOpen = useRef(false);
 
@@ -62,22 +63,32 @@ function SwipeRow({ tx, onDelete }) {
   return (
     <View style={styles.rowContainer}>
       {/* Delete background */}
-      <TouchableOpacity style={styles.deleteBg} onPress={handleDelete}>
-        <Ionicons name="trash" size={22} color={Colors.white} />
-        <Text style={styles.deleteText}>Delete</Text>
+      <TouchableOpacity
+        style={[styles.deleteBg, { backgroundColor: colors.expense }]}
+        onPress={handleDelete}
+      >
+        <Ionicons name="trash" size={22} color={colors.white} />
+        <Text style={[styles.deleteText, { color: colors.white }]}>Delete</Text>
       </TouchableOpacity>
       {/* Swipeable row */}
       <Animated.View
         style={{ transform: [{ translateX }] }}
         {...panResponder.panHandlers}
       >
-        <View style={styles.txRow}>
-          <View style={styles.emojiBox}>
+        <View
+          style={[
+            styles.txRow,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View style={[styles.emojiBox, { backgroundColor: colors.surface }]}>
             <Text style={{ fontSize: 22 }}>{tx.categoryEmoji}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.txName}>{tx.name}</Text>
-            <Text style={styles.txDate}>
+            <Text style={[styles.txName, { color: colors.text }]}>
+              {tx.name}
+            </Text>
+            <Text style={[styles.txDate, { color: colors.textSecondary }]}>
               {new Date(tx.timestamp).toLocaleDateString("en-IN", {
                 day: "2-digit",
                 month: "short",
@@ -92,7 +103,7 @@ function SwipeRow({ tx, onDelete }) {
                 styles.txAmount,
                 {
                   color:
-                    tx.txType === "income" ? Colors.income : Colors.expense,
+                    tx.txType === "income" ? colors.income : colors.expense,
                 },
               ]}
             >
@@ -105,8 +116,8 @@ function SwipeRow({ tx, onDelete }) {
                 {
                   backgroundColor:
                     tx.txType === "income"
-                      ? Colors.income + "22"
-                      : Colors.expense + "22",
+                      ? colors.income + "22"
+                      : colors.expense + "22",
                 },
               ]}
             >
@@ -115,7 +126,7 @@ function SwipeRow({ tx, onDelete }) {
                   styles.typeBadgeText,
                   {
                     color:
-                      tx.txType === "income" ? Colors.income : Colors.expense,
+                      tx.txType === "income" ? colors.income : colors.expense,
                   },
                 ]}
               >
@@ -127,43 +138,78 @@ function SwipeRow({ tx, onDelete }) {
       </Animated.View>
     </View>
   );
-}
+});
 
-export default function TransactionsScreen({ expenseState }) {
+function TransactionsScreen({ expenseState }) {
+  const { isDark } = useTheme();
+  const colors = getColors(isDark);
   const { transactions = [], deleteTransaction } = expenseState;
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
 
-  const filtered = transactions.filter((tx) => {
-    if (activeFilter === "Income" && tx.txType !== "income") return false;
-    if (activeFilter === "Expense" && tx.txType !== "expense") return false;
-    if (search && !tx.name.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (activeFilter === "Income" && tx.txType !== "income") return false;
+      if (activeFilter === "Expense" && tx.txType !== "expense") return false;
+      if (search && !tx.name.toLowerCase().includes(search.toLowerCase()))
+        return false;
+      return true;
+    });
+  }, [transactions, activeFilter, search]);
+
+  const keyExtractor = useCallback((tx) => tx.id, []);
+
+  const renderItem = useCallback(
+    ({ item }) => (
+      <SwipeRow tx={item} onDelete={deleteTransaction} colors={colors} />
+    ),
+    [deleteTransaction, colors],
+  );
+
+  const ListEmptyComponent = useMemo(
+    () => (
+      <View style={styles.empty}>
+        <Text style={{ fontSize: 40 }}>🔍</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          No transactions found
+        </Text>
+      </View>
+    ),
+    [colors.textSecondary],
+  );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Transactions</Text>
-        <Text style={styles.count}>{filtered.length} entries</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Transactions</Text>
+        <Text style={[styles.count, { color: colors.textSecondary }]}>
+          {filtered.length} entries
+        </Text>
       </View>
 
       {/* Search */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={16} color={Colors.textMuted} />
+      <View
+        style={[
+          styles.searchBox,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <Ionicons name="search" size={16} color={colors.textMuted} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
           placeholder="Search transactions..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
         />
         {search ? (
           <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -176,13 +222,21 @@ export default function TransactionsScreen({ expenseState }) {
             onPress={() => setActiveFilter(f)}
             style={[
               styles.filterBtn,
-              activeFilter === f && styles.filterBtnActive,
+              { borderColor: colors.border },
+              activeFilter === f && {
+                backgroundColor: colors.primaryGlow,
+                borderColor: colors.primary,
+              },
             ]}
           >
             <Text
               style={[
                 styles.filterText,
-                activeFilter === f && styles.filterTextActive,
+                { color: colors.textSecondary },
+                activeFilter === f && {
+                  color: colors.primary,
+                  fontWeight: "700",
+                },
               ]}
             >
               {f}
@@ -199,19 +253,23 @@ export default function TransactionsScreen({ expenseState }) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={{ fontSize: 40 }}>🔍</Text>
-            <Text style={styles.emptyText}>No transactions found</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              No transactions found
+            </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <SwipeRow tx={item} onDelete={deleteTransaction} />
+          <SwipeRow tx={item} onDelete={deleteTransaction} colors={colors} />
         )}
       />
     </View>
   );
 }
 
+export default React.memo(TransactionsScreen);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -220,12 +278,11 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  title: { fontSize: 22, fontWeight: "800", color: Colors.text },
-  count: { fontSize: 13, color: Colors.textSecondary },
+  title: { fontSize: 22, fontWeight: "800" },
+  count: { fontSize: 13 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.card,
     borderRadius: 14,
     marginHorizontal: 16,
     marginBottom: 12,
@@ -233,9 +290,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.text },
+  searchInput: { flex: 1, fontSize: 14 },
   filters: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -247,14 +303,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  filterBtnActive: {
-    backgroundColor: Colors.primaryGlow,
-    borderColor: Colors.primary,
-  },
-  filterText: { fontSize: 13, color: Colors.textSecondary, fontWeight: "500" },
-  filterTextActive: { color: Colors.primary, fontWeight: "700" },
+  filterText: { fontSize: 13, fontWeight: "500" },
   list: { paddingHorizontal: 16, paddingBottom: 100 },
   rowContainer: {
     marginBottom: 10,
@@ -268,13 +318,11 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: DELETE_WIDTH,
-    backgroundColor: Colors.expense,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
   },
   deleteText: {
-    color: Colors.white,
     fontSize: 10,
     fontWeight: "600",
     marginTop: 2,
@@ -282,23 +330,20 @@ const styles = StyleSheet.create({
   txRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.card,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   emojiBox: {
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  txName: { fontSize: 14, fontWeight: "600", color: Colors.text },
-  txDate: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
+  txName: { fontSize: 14, fontWeight: "600" },
+  txDate: { fontSize: 11, marginTop: 2 },
   txAmount: { fontSize: 14, fontWeight: "700" },
   typeBadge: {
     paddingHorizontal: 8,
@@ -308,5 +353,5 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: { fontSize: 10, fontWeight: "600" },
   empty: { alignItems: "center", paddingVertical: 60 },
-  emptyText: { color: Colors.textSecondary, fontSize: 14, marginTop: 10 },
+  emptyText: { fontSize: 14, marginTop: 10 },
 });

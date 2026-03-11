@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from "react";
 import { View, StyleSheet, StatusBar } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -8,15 +7,20 @@ import OnboardingScreen from "./src/screens/OnboardingScreen";
 import AppNavigator from "./src/navigation/AppNavigator";
 import AddExpenseModal from "./src/components/AddExpenseModal";
 import { useExpenses } from "./src/hooks/useExpenses";
-import { Colors } from "./src/theme/colors";
+import { Colors, getColors } from "./src/theme/colors";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
+import { CategoriesProvider } from "./src/hooks/useCategories";
+import { AccountsProvider } from "./src/hooks/useAccounts";
 
 const ONBOARDED_KEY = "dhanpath_rn_onboarded";
 
-export default function App() {
+function AppContent() {
   const [onboarded, setOnboarded] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const expenseState = useExpenses();
+  const { isDark, loading } = useTheme();
+  const colors = getColors(isDark);
 
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDED_KEY).then((val) =>
@@ -29,7 +33,10 @@ export default function App() {
     setOnboarded(true);
   };
 
-  if (onboarded === null) return <View style={styles.splash} />;
+  if (onboarded === null || loading)
+    return (
+      <View style={[styles.splash, { backgroundColor: colors.background }]} />
+    );
 
   if (!onboarded) {
     return (
@@ -41,22 +48,37 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
       <NavigationContainer>
         <AppNavigator
           expenseState={expenseState}
-          onAddExpense={() => setModalVisible(true)}
+          onAddExpense={handleAddExpense}
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
         />
       </NavigationContainer>
       <AddExpenseModal
         visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onSave={(data) => expenseState.addTransaction(data)}
+        onClose={handleModalClose}
+        onSave={handleModalSave}
         selectedDate={selectedDate}
       />
     </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <CategoriesProvider>
+        <AccountsProvider>
+          <AppContent />
+        </AccountsProvider>
+      </CategoriesProvider>
+    </ThemeProvider>
   );
 }
 

@@ -3,11 +3,37 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.yarn/
 
-# Expo
-.expo/
-dist/
-web-build/
+# React Native CLI
+.bundle/
+
+# Metro
+.metro-health-check*
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+ios/*.xcworkspace
+ios/*.xcodeproj/xcuserdata
+ios/build/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+*.keystore
+!android/app/debug.keystore
+
+# Build
 *.jks
 *.p8
 *.p12
@@ -15,19 +41,20 @@ web-build/
 *.mobileprovision
 *.orig.*
 
-# Metro
-.metro-health-check*
+# Environment
+.env
+.env.local
+.env.*
 
-# iOS
-ios/Pods/
-ios/*.xcworkspace
-ios/*.xcodeproj
+# IDE
+.idea/
+.vscode/
+*.iml
 
-# Android
-android/.gradle/
-android/app/build/
-android/build/
-*.apk
+# Temporary
+*.log
+*.tmp
+.DS_Store
 *.aab
 
 # Environment
