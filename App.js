@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, StatusBar } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -11,6 +12,7 @@ import { Colors, getColors } from "./src/theme/colors";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 import { CategoriesProvider } from "./src/hooks/useCategories";
 import { AccountsProvider } from "./src/hooks/useAccounts";
+import { performAutomaticBackup } from "./src/utils/backupRestore";
 
 const ONBOARDED_KEY = "dhanpath_rn_onboarded";
 
@@ -26,11 +28,28 @@ function AppContent() {
     AsyncStorage.getItem(ONBOARDED_KEY).then((val) =>
       setOnboarded(val === "true"),
     );
+    // Check and perform automatic backup if due
+    performAutomaticBackup().catch((err) =>
+      console.log("Auto backup check failed:", err),
+    );
   }, []);
 
   const handleOnboardingDone = async () => {
     await AsyncStorage.setItem(ONBOARDED_KEY, "true");
     setOnboarded(true);
+  };
+
+  const handleAddExpense = () => {
+    setModalVisible(true);
+  };
+
+  const handleModalClose = () => {
+    setModalVisible(false);
+  };
+
+  const handleModalSave = (expense) => {
+    expenseState.addExpense(expense);
+    setModalVisible(false);
   };
 
   if (onboarded === null || loading)

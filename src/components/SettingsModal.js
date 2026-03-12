@@ -12,12 +12,14 @@ import { getColors } from "../theme/colors";
 import { useTheme } from "../theme/ThemeContext";
 import CategoryManager from "./CategoryManager";
 import AccountManager from "./AccountManager";
+import BackupSettings from "./BackupSettings";
 
 export default function SettingsModal({ visible, onClose }) {
   const { isDark, toggleTheme } = useTheme();
   const colors = getColors(isDark);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [showAccountManager, setShowAccountManager] = useState(false);
+  const [showBackupSettings, setShowBackupSettings] = useState(false);
 
   return (
     <Modal
@@ -150,6 +152,54 @@ export default function SettingsModal({ visible, onClose }) {
             />
           </TouchableOpacity>
 
+          {/* Data Management Section */}
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.textSecondary, marginTop: 8 },
+            ]}
+          >
+            DATA MANAGEMENT
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.settingRow,
+              { borderBottomColor: colors.border, borderBottomWidth: 0 },
+            ]}
+            onPress={() => setShowBackupSettings(true)}
+          >
+            <View style={styles.settingLeft}>
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: colors.primaryGlow },
+                ]}
+              >
+                <Ionicons
+                  name="cloud-upload"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Backup & Restore
+                </Text>
+                <Text
+                  style={[styles.settingDesc, { color: colors.textSecondary }]}
+                >
+                  Save your data & restore anytime
+                </Text>
+              </View>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
           {/* Close Button */}
           <TouchableOpacity
             style={[styles.closeBtn, { backgroundColor: colors.primary }]}
@@ -168,6 +218,12 @@ export default function SettingsModal({ visible, onClose }) {
           <AccountManager
             visible={showAccountManager}
             onClose={() => setShowAccountManager(false)}
+          />
+
+          {/* Backup Settings Modal */}
+          <BackupSettings
+            visible={showBackupSettings}
+            onClose={() => setShowBackupSettings(false)}
           />
         </View>
       </View>

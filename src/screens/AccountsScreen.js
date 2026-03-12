@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ function AccountsScreen() {
 
   const totalBalance = useMemo(
     () => accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0),
-    [accounts]
+    [accounts],
   );
 
   const formatBalance = useCallback((balance) => {
@@ -33,32 +33,38 @@ function AccountsScreen() {
       : `-₹${Math.abs(num).toLocaleString("en-IN")}`;
   }, []);
 
-  const handleSetDefault = useCallback((account) => {
-    setDefaultAccount(account.id);
-  }, [setDefaultAccount]);
+  const handleSetDefault = useCallback(
+    (account) => {
+      setDefaultAccount(account.id);
+    },
+    [setDefaultAccount],
+  );
 
-  const handleDeleteAccount = useCallback((account) => {
-    if (account.isDefault) {
+  const handleDeleteAccount = useCallback(
+    (account) => {
+      if (account.isDefault) {
+        Alert.alert(
+          "Cannot Delete",
+          "Cannot delete the default account. Set another account as default first.",
+        );
+        return;
+      }
+
       Alert.alert(
-        "Cannot Delete",
-        "Cannot delete the default account. Set another account as default first.",
+        "Delete Account",
+        `Are you sure you want to delete "${account.label}"?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => deleteAccount(account.id),
+          },
+        ],
       );
-      return;
-    }
-
-    Alert.alert(
-      "Delete Account",
-      `Are you sure you want to delete "${account.label}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteAccount(account.id),
-        },
-      ],
-    );
-  }, [deleteAccount]);
+    },
+    [deleteAccount],
+  );
 
   const getAccountTypeIcon = (type) => {
     switch (type) {
@@ -334,4 +340,3 @@ const styles = StyleSheet.create({
 });
 
 export default React.memo(AccountsScreen);
-
